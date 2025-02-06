@@ -66,9 +66,11 @@ class EventList:
     def random_local_solution(self) -> 'EventList':
         
         new_jobs = copy.deepcopy(self.jobs)
-        random_event = random.choice(self.events)
+        random_event = random.choice(self.events[:-1])
         
         for job in random_event.jobs:
+            if job.id == 0:
+                continue
             new_jobs.remove(job)
             inferior_pos = max(filter(lambda j: j.id in job.predecessors, new_jobs), key=lambda j: new_jobs.index(j))
             superior_pos = min(filter(lambda j: j.id in job.sucessors, new_jobs), key=lambda j: new_jobs.index(j))
