@@ -26,8 +26,8 @@ class EventList:
     def get_makespan(self) -> int:
         return self.events[-1].startTime
     
-    def plot(self):
-        plot_solution(self)
+    def plot(self, seed: int | None = None):
+        plot_solution(self, seed=seed)
         
     def create_event_list(self, resources: Resources):
         
@@ -89,6 +89,28 @@ class EventList:
             sol = sol.random_local_solution()
             
         return sol
+
+    def recombine_solution(self, other: 'EventList') -> 'EventList':
+        self_events = []
+        selected_jobs = []
+        sorted_events = sorted(self.events, key=lambda e: len(e.jobs), reverse=True)
+        for e in self.events:
+            if e in sorted_events:
+                self_events.append(copy.deepcopy(e))
+                selected_jobs += e.jobs
+            if len(selected_jobs) / 2 >= len(self.jobs):
+                break
+        other_jobs = copy.deepcopy(list(filter(lambda j: j not in selected_jobs, other.jobs)))
+        selected_jobs = []
+        while len(self_events) == 0 and len(other_jobs) == 0:
+            j = other_jobs[0]
+            if set(j.predecessors).issubset(selected_jobs):
+                selected_jobs.append((other_jobs.pop(0)))
+                continue
+            selected_jobs += self_events.pop(0).jobs
+            
+            
+        return None
     
     def generate_schedule_scheme(self) -> np.array:
         resources = self.psmodel.resources.resources
