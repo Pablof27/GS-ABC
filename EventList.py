@@ -4,6 +4,7 @@ import random
 from Utils import topological_sort, plot_solution
 from dataclasses import dataclass
 import copy
+from time import time
 
 @dataclass
 class EventList:
@@ -12,9 +13,10 @@ class EventList:
     events: List[Event]
     jobs: List[Job]
     
-    def __init__(self, psmodel: ProjectSchedulingModel, jobs: List[Job] | None = None):
+    def __init__(self, psmodel: ProjectSchedulingModel, jobs: List[Job] | None = None, seed: int | None = None):
         self.events = []
         self.psmodel = psmodel
+        np.random.seed(seed if seed is not None else int(time()))
         self.jobs = topological_sort(psmodel.jobs) if jobs is None else jobs
         for job in self.jobs:
             job.start_time = None
@@ -94,23 +96,34 @@ class EventList:
         self_events = []
         selected_jobs = []
         sorted_events = sorted(self.events, key=lambda e: len(e.jobs), reverse=True)
-        for e in self.events:
-            if e in sorted_events:
-                self_events.append(copy.deepcopy(e))
-                selected_jobs += e.jobs
-            if len(selected_jobs) / 2 >= len(self.jobs):
+        for e in sorted_events:
+            self_events.append(e)
+            selected_jobs.extend(e.jobs)
+            if len(selected_jobs) >= len(self.jobs)/2:
                 break
+        self_events = sorted(self_events, key=lambda e: e.startTime)
         other_jobs = copy.deepcopy(list(filter(lambda j: j not in selected_jobs, other.jobs)))
         selected_jobs = []
-        while len(self_events) == 0 and len(other_jobs) == 0:
-            j = other_jobs[0]
-            if set(j.predecessors).issubset(selected_jobs):
+        left_jobs_queue = []
+        while len(self_events) > 0 or len(other_jobs) > 0 or len(left_jobs_queue) > 0:
+            if len(left_jobs_queue) > 0:
+                job = left_jobs_queue.pop(0)
+                if set(job.predecessors).issubset([j.id for j in selected_jobs]):
+                    selected_jobs.append(job)
+                else:
+                    left_jobs_queue.insert(0, job)
+            job = other_jobs[0]
+            if set(job.predecessors).issubset([j.id for j in selected_jobs]):
                 selected_jobs.append((other_jobs.pop(0)))
                 continue
-            selected_jobs += self_events.pop(0).jobs
-            
-            
-        return None
+            event = self_events.pop(0)
+            for j in event.jobs:
+                if set(j.predecessors).issubset([j_.id for j_ in selected_jobs]):
+                    selected_jobs.append(j)
+                else:
+                    left_jobs_queue.append(j)
+        
+        return EventList(self.psmodel, jobs=selected_jobs)
     
     def generate_schedule_scheme(self) -> np.array:
         resources = self.psmodel.resources.resources
