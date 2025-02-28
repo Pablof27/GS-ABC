@@ -13,10 +13,9 @@ class EventList:
     events: List[Event]
     jobs: List[Job]
     
-    def __init__(self, psmodel: ProjectSchedulingModel, jobs: List[Job] | None = None, seed: int | None = None):
+    def __init__(self, psmodel: ProjectSchedulingModel, jobs: List[Job] | None = None):
         self.events = []
         self.psmodel = psmodel
-        np.random.seed(seed if seed is not None else int(time()))
         self.jobs = topological_sort(psmodel.jobs) if jobs is None else jobs
         for job in self.jobs:
             job.start_time = None
@@ -28,8 +27,8 @@ class EventList:
     def get_makespan(self) -> int:
         return self.events[-1].startTime
     
-    def plot(self, seed: int | None = None):
-        plot_solution(self, seed=seed)
+    def plot(self, mapping=None):
+        plot_solution(self, mapping=mapping)
         
     def create_event_list(self, resources: Resources):
         
@@ -111,10 +110,13 @@ class EventList:
                 if set(job.predecessors).issubset([j.id for j in selected_jobs]):
                     selected_jobs.append(job)
                 else:
-                    left_jobs_queue.insert(0, job)
-            job = other_jobs[0]
-            if set(job.predecessors).issubset([j.id for j in selected_jobs]):
-                selected_jobs.append((other_jobs.pop(0)))
+                    left_jobs_queue.append(job)
+            if len(other_jobs) > 0:
+                job = other_jobs[0]
+                if set(job.predecessors).issubset([j.id for j in selected_jobs]):
+                    selected_jobs.append((other_jobs.pop(0)))
+                    continue
+            if len(self_events) == 0:
                 continue
             event = self_events.pop(0)
             for j in event.jobs:
@@ -147,3 +149,9 @@ class EventList:
                         indexes[i][col] = end
                                                 
         return schedules
+    
+    def __str__(self):
+        sol_str = ""
+        for event in self.events:
+            sol_str += f"Event {event.id} at time {event.startTime}, jobs: {', '.join(str(job.id + 1) for job in event.jobs)}\n"
+        return sol_str
