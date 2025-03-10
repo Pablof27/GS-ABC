@@ -61,13 +61,13 @@ class ProjectSchedulingModel:
             for successor in job.sucessors:
                 suc = next(j for j in jobs if j.id == successor)
                 if job.start_time + job.duration > suc.start_time:
-                    print("Job", job.id, "ends at", job.start_time + job.duration, "and sucessor", suc.id, "starts at", suc.start_time)
+                    # print("Job", job.id, "ends at", job.start_time + job.duration, "and sucessor", suc.id, "starts at", suc.start_time)
                     return False
         for t in range(jobs[-1].start_time):
             resources_used = np.zeros(len(self.resources.resources), dtype=np.int32)
             resources_used += sum(j.resources_needed if j.isActiveAtTime(t) else 0 for j in jobs)
             if np.any(resources_used > self.resources.resources):
-                print(t, resources_used)
+                # print(t, resources_used)
                 return False
         return True
     

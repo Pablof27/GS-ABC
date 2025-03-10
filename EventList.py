@@ -4,7 +4,6 @@ import random
 from Utils import topological_sort, plot_solution
 from dataclasses import dataclass
 import copy
-from time import time
 
 @dataclass
 class EventList:

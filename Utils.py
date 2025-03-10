@@ -4,6 +4,7 @@ from SchedulingProblem import Job
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+import copy
 
 
 def topological_sort(jobs: List[Job]) -> List[Job]:
@@ -21,7 +22,7 @@ def topological_sort(jobs: List[Job]) -> List[Job]:
     while queue:
         job_id = queue.pop(random.randint(0, len(queue) - 1))
         job = next(job for job in jobs if job.id == job_id)
-        sorted_jobs.append(job)
+        sorted_jobs.append(copy.deepcopy(job))
         
         for successor in graph[job_id]:
             in_degree[successor] -= 1
