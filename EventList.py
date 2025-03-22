@@ -71,14 +71,14 @@ class EventList:
         for job in random_event.jobs:
             if job.id == 0:
                 continue
-            new_jobs.remove(job)
-            inferior_pos = max(filter(lambda j: j.id in job.predecessors, new_jobs), key=lambda j: new_jobs.index(j))
-            superior_pos = min(filter(lambda j: j.id in job.sucessors, new_jobs), key=lambda j: new_jobs.index(j))
+            new_job = new_jobs.pop(new_jobs.index(job))
+            inferior_pos = max(filter(lambda j: j.id in new_job.predecessors, new_jobs), key=lambda j: new_jobs.index(j))
+            superior_pos = min(filter(lambda j: j.id in new_job.sucessors, new_jobs), key=lambda j: new_jobs.index(j))
             new_pos = random.randint(new_jobs.index(inferior_pos) + 1, new_jobs.index(superior_pos))
             # print(f"Moving job {job.id} to position {new_pos} in the interval {[new_jobs.index(inferior_pos) + 1, new_jobs.index(superior_pos)]}")
             # print(f"    Predecessors: {job.predecessors}")
             # print(f"    Sucessors: {job.sucessors}")
-            new_jobs.insert(new_pos, job)
+            new_jobs.insert(new_pos, new_job)
             
         return EventList(self.psmodel, new_jobs)
     
