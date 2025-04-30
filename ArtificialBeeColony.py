@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from EventList import EventList
 from typing import Tuple
 import multiprocessing as mp
+from Utils import positional_entropy, average_pairwise_distance
 
 @dataclass
 class Parameters:
@@ -39,9 +40,6 @@ class ArtificialBeeColony:
                 self.food_sources[selected] = new_solution
                 self.updates[selected] = 0
                 
-    def employee_and_onlooker_phase(self, slice: Tuple[int, int]):
-        self.employeed_phase(slice)
-        self.onlooker_phase(slice)
     
     def optimize(self, params: Parameters = None, num_workers: int = 1):
         
@@ -52,22 +50,35 @@ class ArtificialBeeColony:
         self.food_sources = [EventList(self.psmodel) for _ in range(p.N)]
         self.updates = np.zeros(p.N, dtype=np.int32)
         best_solution = min(self.food_sources, key=lambda s: s.get_makespan())
+        best_evolution = [best_solution]
+
+        permutations = [[job.id for job in solution.jobs] for solution in self.food_sources]
+        population_diversity = [positional_entropy(permutations)[1]]
+        average_distance = [average_pairwise_distance(permutations)]
         
-        with mp.Pool(num_workers) as pool:
-            while trials < p.max_trials:
-                
-                pool.map(self.employeed_phase, slices)
-                        
-                iteration_best = min(self.food_sources, key=lambda s: s.get_makespan())
-                if iteration_best.get_makespan() < best_solution.get_makespan():
-                    best_solution = iteration_best
-                    trials = 0
-                else:
-                    trials += 1
+        while trials < p.max_trials:
+            
+            self.employeed_phase(slices[0])
+            self.onlooker_phase(slices[0])
                     
-                selected = np.where(self.updates > p.limit)[0]
-                for i in selected:
-                    self.food_sources[i] = EventList(self.psmodel)
-                    self.updates[i] = 0
+            iteration_best = min(self.food_sources, key=lambda s: s.get_makespan())
+            if iteration_best.get_makespan() < best_solution.get_makespan():
+                best_solution = iteration_best
+                trials = 0
+            else:
+                trials += 1
+            best_evolution.append(best_solution)
+                
+            selected = np.where(self.updates > p.limit)[0]
+            for i in selected:
+                self.food_sources[i] = best_solution.recombine_solution(self.food_sources[i]) if random.random() < 0.5 else self.food_sources[i].recombine_solution(best_solution)
+                self.updates[i] = 0
+
+            permutations = [[job.id for job in solution.jobs] for solution in self.food_sources]
+            population_diversity.append(positional_entropy(permutations)[1])
+            average_distance.append(average_pairwise_distance(permutations))
         
-        return best_solution
+        self.population_divsersity = population_diversity
+        self.average_distance = average_distance
+        
+        return best_evolution

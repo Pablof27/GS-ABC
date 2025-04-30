@@ -75,3 +75,77 @@ def plot_multiple_schedules(schedules, titles=None, mapping=None):
 def plot_solution(solution, mapping=None):
     scheme = solution.generate_schedule_scheme()
     plot_multiple_schedules(scheme, mapping=mapping)
+
+import numpy as np
+from math import log2
+
+def positional_entropy(permutations):
+    """
+    Computes average and normalized positional entropy for a list of permutations.
+
+    Args:
+        permutations (list of lists): Each inner list is a permutation of integers from 1 to n.
+
+    Returns:
+        (float, float): (average_entropy, normalized_entropy)
+    """
+    if not permutations:
+        return 0.0, 0.0
+
+    permutations = np.array(permutations)
+    m, n = permutations.shape
+    max_entropy = log2(n)
+    total_entropy = 0.0
+
+    for i in range(n):
+        # Count occurrences of each value at position i
+        counts = np.bincount(permutations[:, i], minlength=n + 1)[1:]  # skip index 0
+        probs = counts[counts > 0] / m
+        entropy = -np.sum(probs * np.log2(probs))
+        total_entropy += entropy
+
+    average_entropy = total_entropy / n
+    normalized_entropy = average_entropy / max_entropy if max_entropy > 0 else 0.0
+
+    return average_entropy, normalized_entropy
+
+import numpy as np
+
+def hamming_distance(p1, p2):
+    return sum(a != b for a, b in zip(p1, p2))
+
+def average_pairwise_distance(permutations, metric='hamming'):
+    """
+    Computes average pairwise distance between permutations using the given metric.
+    
+    Args:
+        permutations (list of lists): Each inner list is a permutation.
+        metric (str): 'hamming' or 'kendall'
+
+    Returns:
+        float: Average pairwise distance
+    """
+    m = len(permutations)
+    if m < 2:
+        return 0.0  # No pairs to compare
+
+    if metric == 'hamming':
+        distance_func = hamming_distance
+    else:
+        raise ValueError("Unsupported metric. Use 'hamming' or 'kendall'.")
+
+    total_distance = 0
+    count = 0
+
+    for i in range(m - 1):
+        for j in range(i + 1, m):
+            total_distance += distance_func(permutations[i], permutations[j])
+            count += 1
+
+    return total_distance / count
+
+    
+def normalize(data):
+    min_val = min(data)
+    max_val = max(data)
+    return [(x - min_val) / (max_val - min_val) for x in data]
