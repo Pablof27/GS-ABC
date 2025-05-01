@@ -7,7 +7,7 @@ import matplotlib.patches as patches
 import copy
 
 
-def topological_sort(jobs: List[Job]) -> List[Job]:
+def topological_sort(jobs: List[Job], metric='random') -> List[Job]:
     in_degree = {job.id: 0 for job in jobs}
     graph = {job.id: [] for job in jobs}
     
@@ -16,24 +16,51 @@ def topological_sort(jobs: List[Job]) -> List[Job]:
             graph[job.id].append(successor)
             in_degree[successor] += 1
     
-    queue = [job.id for job in jobs if in_degree[job.id] == 0]
+    queue = [job for job in jobs if in_degree[job.id] == 0]
     sorted_jobs = []
     
+    if metric == 'random':
+        select_func = rnd
+    elif metric == 'ldf':
+        select_func = ldf
+    elif metric == 'sdf':
+        select_func = sdf
+    elif metric == 'mrf':
+        select_func = mrf
+    elif metric == 'lrf':
+        select_func = lrf
+    else:
+        raise ValueError("Unsupported metric.")
+    
     while queue:
-        job_id = queue.pop(random.randint(0, len(queue) - 1))
-        job = next(job for job in jobs if job.id == job_id)
+        job = queue.pop(select_func(queue))
         sorted_jobs.append(copy.deepcopy(job))
         
-        for successor in graph[job_id]:
+        for successor in graph[job.id]:
             in_degree[successor] -= 1
             if in_degree[successor] == 0:
-                queue.append(successor)
+                j = next(job for job in jobs if job.id == successor)
+                queue.append(j)
     
     if len(sorted_jobs) != len(jobs):
         raise ValueError("The job graph has at least one cycle.")
     
     return sorted_jobs
 
+def rnd(queue) -> int:
+    return random.randint(0, len(queue) - 1)
+
+def ldf(queue) -> int:
+    return max(enumerate(queue), key=lambda x: x[1].duration)[0]
+
+def sdf(queue) -> int:
+    return min(enumerate(queue), key=lambda x: x[1].duration)[0]
+
+def mrf(queue) -> int:
+    return max(enumerate(queue), key=lambda x: np.sum(x[1].resources_needed))[0]
+
+def lrf(queue) -> int:
+    return min(enumerate(queue), key=lambda x: np.sum(x[1].resources_needed))[0]
 
 def plot_multiple_schedules(schedules, titles=None, mapping=None):
     num_schedules = len(schedules)
@@ -114,6 +141,19 @@ import numpy as np
 def hamming_distance(p1, p2):
     return sum(a != b for a, b in zip(p1, p2))
 
+def kendall_tau_distance(p1, p2):
+    n = len(p1)
+    index_map = {val: i for i, val in enumerate(p1)}
+    mapped_p2 = [index_map[val] for val in p2]
+
+    # Count inversions in mapped_p2
+    inversions = 0
+    for i in range(n):
+        for j in range(i + 1, n):
+            if mapped_p2[i] > mapped_p2[j]:
+                inversions += 1
+    return inversions
+
 def average_pairwise_distance(permutations, metric='hamming'):
     """
     Computes average pairwise distance between permutations using the given metric.
@@ -131,6 +171,8 @@ def average_pairwise_distance(permutations, metric='hamming'):
 
     if metric == 'hamming':
         distance_func = hamming_distance
+    elif metric == 'kendall':
+        distance_func = kendall_tau_distance
     else:
         raise ValueError("Unsupported metric. Use 'hamming' or 'kendall'.")
 

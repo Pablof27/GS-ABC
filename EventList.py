@@ -15,7 +15,7 @@ class EventList:
     def __init__(self, psmodel: ProjectSchedulingModel, jobs: List[Job] | None = None):
         self.events = []
         self.psmodel = psmodel
-        self.jobs = topological_sort(psmodel.jobs) if jobs is None else jobs
+        self.jobs = topological_sort(psmodel.jobs) if jobs is None else [copy.deepcopy(job) for job in jobs]
         for job in self.jobs:
             job.start_time = None
         self.create_event_list(psmodel.resources)
@@ -148,7 +148,7 @@ class EventList:
                         indexes[i][col] = end
                                                 
         return schedules
-    
+
     def __str__(self):
         sol_str = ""
         for event in self.events:
