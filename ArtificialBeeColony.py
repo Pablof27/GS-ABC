@@ -110,7 +110,7 @@ class ArtificialBeeColony:
                 
             selected = np.where(self.updates > p.limit)[0]
             for i in selected:
-                self.food_sources[i] = EventList(psmodel=self.psmodel)
+                self.food_sources[i] = best_solution.recombine_solution(self.food_sources[i]) if random.random() < 0.5 else self.food_sources[i].recombine_solution(best_evolution)
                 self.updates[i] = 0
 
             permutations = [[job.id for job in solution.jobs] for solution in self.food_sources]
