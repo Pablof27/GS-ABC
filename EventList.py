@@ -81,6 +81,25 @@ class EventList:
             new_jobs.insert(new_pos, new_job)
             
         return EventList(self.psmodel, new_jobs)
+
+    def swap_new_solution(self, iterations=1) -> 'EventList':
+        
+        new_jobs = copy.deepcopy(self.jobs)
+        for i in range(iterations):
+            idx = random.randint(1, len(self.jobs)-3)
+            if self.can_swap(new_jobs, idx):
+                new_jobs[idx], new_jobs[idx+1] = new_jobs[idx+1], new_jobs[idx]
+        
+        return EventList(psmodel=self.psmodel, jobs=new_jobs)
+                
+    @staticmethod
+    def can_swap(jobs, i) -> bool:
+        a, b = jobs[i], jobs[i+1]
+
+        if a.id in b.predecessors:
+            return False
+        
+        return True
     
     def generate_new_local_solution(self, steps: int = 1) -> 'EventList':
         

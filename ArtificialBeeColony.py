@@ -11,6 +11,7 @@ class Parameters:
     N: int
     limit: int
     max_trials: int
+    mr: float = 0.1
 
 class ArtificialBeeColony:
     
@@ -32,26 +33,18 @@ class ArtificialBeeColony:
 
         return [EventList(psmodel=self.psmodel, jobs=p) for p in population]
 
-    def mcmc_sampling(self, permutation, num_sample: int, burn_in: int, spacing: int):
+    def mcmc_sampling(self, permutation, num_sample, burn_in: int, spacing: int):
         samples = []
         iterations = burn_in + num_sample * spacing
 
         for t in range(int(iterations)):
             idx = random.randint(1, len(self.psmodel.jobs)-3)
-            if self.can_swap(permutation, idx):
+            if EventList.can_swap(permutation, idx):
                 permutation[idx], permutation[idx+1] = permutation[idx+1], permutation[idx]
             if t >= burn_in and (t-burn_in)%spacing == 0:
                 samples.append(permutation[:]) 
 
         return samples
-    
-    def can_swap(self, jobs, i) -> bool:
-        a, b = jobs[i], jobs[i+1]
-
-        if a.id in b.predecessors:
-            return False
-        
-        return True
     
     def set_parameters(self, N, limit, max_trials):
         self.params = Parameters(N, limit, max_trials)
@@ -92,6 +85,7 @@ class ArtificialBeeColony:
 
         permutations = [[job.id for job in solution.jobs] for solution in self.food_sources]
         population_diversity = [positional_entropy(permutations)[1]]
+        nscout_bees = [0]
         # average_distance = [average_pairwise_distance(permutations)]
         # k_average_distance = [average_pairwise_distance(permutations, metric='kendall')]
         
@@ -109,8 +103,12 @@ class ArtificialBeeColony:
             best_evolution.append(best_solution)
                 
             selected = np.where(self.updates > p.limit)[0]
+            nscout_bees.append(len(selected))
             for i in selected:
-                self.food_sources[i] = best_solution.recombine_solution(self.food_sources[i]) if random.random() < 0.5 else self.food_sources[i].recombine_solution(best_evolution)
+                self.food_sources[i] = best_solution.recombine_solution(self.food_sources[i]) if random.random() < 0.5 else self.food_sources[i].recombine_solution(best_solution)
+                r = random.random()
+                if r < params.mr:
+                    self.food_sources[i] = self.food_sources[i].swap_new_solution()
                 self.updates[i] = 0
 
             permutations = [[job.id for job in solution.jobs] for solution in self.food_sources]
@@ -119,6 +117,7 @@ class ArtificialBeeColony:
             # k_average_distance.append(average_pairwise_distance(permutations, metric='kendall'))
         
         self.population_divsersity = population_diversity
+        self.nscout_bees = nscout_bees
         # self.average_distance = average_distance
         # self.k_average_distance = k_average_distance
         

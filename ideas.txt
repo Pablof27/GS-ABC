@@ -1,0 +1,7 @@
+Operar sobre una lista de prioridad con un parallel scheduling scheme o reinterpretar serial scheduling scheme
+
+Limit adaptativo que dependa de la diversidad de la población
+
+Aplicar una pequeña fase de búsqueda local (heurística o VNS)
+    - shift foward: puede haber actividades que se puedan adelantar
+    - swap/insert + SGS
