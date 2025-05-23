@@ -38,15 +38,23 @@ class Resources:
         self.resourcesList = resourcesList
         self.resources = np.array([resource.capacity for resource in resourcesList])
         
-    def get_time_for_resources(self, jobs: List[Job], job: Job, base_time: int) -> int:
+    def get_time_for_resources(self, jobs: List[Job], job: Job, base_time: int, end_time=np.Infinity) -> int:
         resources = self.resources
-        for time in count(base_time):
-            resources_used = np.zeros(len(resources), dtype=np.int32)
-            active_jobs = [j for j in jobs if j.isActiveAtTime(time) or job == j]
-            resources_used = sum(j.resources_needed for j in active_jobs)
-            if np.all(resources_used <= resources):
+        for start_time in count(base_time):
+            if start_time >= end_time:
                 break
-        return time
+            time_found = True
+            time = start_time
+            while time < start_time + job.duration and time_found: 
+                resources_used = np.zeros(len(resources), dtype=np.int32)
+                active_jobs = [j for j in jobs if j.isActiveAtTime(time) or job == j]
+                resources_used = sum(j.resources_needed for j in active_jobs)
+                if np.any(resources_used > resources):
+                    time_found = False
+                time += 1
+            if time_found:
+                break
+        return start_time
 
 @dataclass
 class ProjectSchedulingModel:

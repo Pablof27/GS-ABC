@@ -4,6 +4,7 @@ import random
 from Utils import topological_sort, plot_solution
 from dataclasses import dataclass
 import copy
+from dijkstar import Graph, find_path
 
 @dataclass
 class EventList:
@@ -24,11 +25,39 @@ class EventList:
         return [job for event in self.events for job in event.jobs]
     
     def get_makespan(self) -> int:
-        return self.events[-1].startTime
+        return self.jobs[-1].start_time
     
     def plot(self, mapping=None):
         plot_solution(self, mapping=mapping)
-        
+
+    def critical_path(self):
+        graph = Graph()
+        for j in self.jobs:
+            for sucessor_id in j.sucessors:
+                sucessor = next(filter(lambda x: x.id == sucessor_id, self.jobs))
+                graph.add_edge(j.id, sucessor_id, sucessor.start_time - j.start_time)
+        critical_path = find_path(graph, 0, self.jobs[-1].id)
+        self._critical_path = critical_path.nodes
+        # self._critical_path.nodes = [n+1 for n in critical_path.nodes]
+
+    def shift_foward_search(self):
+        can_shift = True
+        max_trials = len(self.jobs)/3
+        while can_shift:
+            can_shift = False
+            for job in self.jobs[1:]:
+                old_start_time = job.start_time
+                job.start_time = None
+                last_predecessor = max(filter(lambda j: j.id in job.predecessors, self.jobs), key=lambda j: j.start_time + j.duration)
+                predecessors_end_time = last_predecessor.start_time + last_predecessor.duration
+                new_time = self.psmodel.resources.get_time_for_resources(self.jobs, job, predecessors_end_time, old_start_time)
+                job.start_time = old_start_time
+                if new_time < job.start_time:
+                    can_shift = True
+                    job.start_time = new_time
+
+        self.jobs = sorted(self.jobs, key=lambda j: j.start_time)
+                
     def create_event_list(self, resources: Resources):
         
         self.add(self.jobs[0], start_time=0)

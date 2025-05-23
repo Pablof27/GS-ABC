@@ -94,7 +94,7 @@ def plot_multiple_schedules(schedules, titles=None, mapping=None):
         ax.set_xticks(np.arange(0, num_times + 1, 1))
         ax.set_yticks(np.arange(0, schedule.shape[0] + 1, 1))
         ax.set_yticklabels([])
-        ax.grid(True, which='both', linestyle='-', linewidth=0.25)
+        ax.grid(True, which='major', linestyle='-', linewidth=0.25, alpha=0.5)
 
     plt.tight_layout()
     plt.show()
