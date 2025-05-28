@@ -12,6 +12,7 @@ class Parameters:
     limit: int
     max_trials: int
     mr: float = 0.1
+    l: int = 25
 
 class ArtificialBeeColony:
     
@@ -101,6 +102,8 @@ class ArtificialBeeColony:
             else:
                 trials += 1
             best_evolution.append(best_solution)
+            if trials % params.l == 0 and trials != 0:
+                best_solution.shift_foward_search()
                 
             selected = np.where(self.updates > p.limit)[0]
             nscout_bees.append(len(selected))

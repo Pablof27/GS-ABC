@@ -57,6 +57,18 @@ class EventList:
                     job.start_time = new_time
 
         self.jobs = sorted(self.jobs, key=lambda j: j.start_time)
+        self.events = []
+        self.add(self.jobs[0], start_time=0)
+        current_time = 0
+        for job in self.jobs[1:]:
+            start_time = job.start_time
+            if start_time == current_time:
+                self.add(job, event_id=-1)
+            if start_time > current_time:
+                self.add(job, start_time=start_time)
+                current_time = start_time
+            if start_time < current_time:
+                raise ValueError("Invalid start time")
                 
     def create_event_list(self, resources: Resources):
         
