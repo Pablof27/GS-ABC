@@ -62,6 +62,7 @@ class ProjectSchedulingModel:
     name: str
     jobs: List[Job]
     resources: Resources
+    best_known: int = 0
     
     def validate_solution(self, solution) -> bool:
         jobs = solution.jobs
@@ -78,6 +79,16 @@ class ProjectSchedulingModel:
                 # print(t, resources_used)
                 return False
         return True
+    
+    def times2jobs(self, times):
+        jobs = []
+        for i, t in enumerate(times):
+            thisJob = next(filter(lambda j: j.id == i, self.jobs))
+            job = Job(id=i, duration=thisJob.duration, resources_needed=thisJob.resources_needed, sucessors=thisJob.sucessors, predecessors=thisJob.predecessors, start_time=t)
+            jobs.append(job)
+
+        jobs = sorted(jobs, key=lambda j: j.start_time)
+        return jobs
     
     @staticmethod
     def from_file(file_path: str) -> 'ProjectSchedulingModel':
@@ -101,11 +112,11 @@ class ProjectSchedulingModel:
                 antecessors[suc].append(i - 18)
                 
         jobs = []
-        for i in range(54, 54 + njobs):
-            line = lines[i].split()
-            jobs.append(Job(id=i-54, duration=int(line[2]), resources_needed=np.array([int(line[3 + j]) for j in range(nresources)]), sucessors=succesors[i-54], predecessors=antecessors[i-54]))
+        for i in range(0, njobs):
+            line = lines[22 + njobs + i].split()
+            jobs.append(Job(id=i, duration=int(line[2]), resources_needed=np.array([int(line[3 + j]) for j in range(nresources)]), sucessors=succesors[i], predecessors=antecessors[i]))
         
-        capacities_line = lines[89].split()
+        capacities_line = lines[2*njobs + 25].split()
         resourcesList = [Resource(id=i, capacity=int(capacities_line[i])) for i in range(nresources)]
         resources = Resources(resourcesList=resourcesList)
         name = file_path.split("/")[-1].split(".")[0]

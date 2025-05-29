@@ -1,10 +1,12 @@
-from typing import List
+from typing import List, Any
 import random
-from SchedulingProblem import Job
+from SchedulingProblem import Job, ProjectSchedulingModel
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import copy
+import json
+from dataclasses import dataclass, asdict, is_dataclass
 
 
 def topological_sort(jobs: List[Job], metric='random') -> List[Job]:
@@ -186,8 +188,171 @@ def average_pairwise_distance(permutations, metric='hamming'):
 
     return total_distance / count
 
+def calculate_unique_individuals(population):
+    
+    unique_individuals = set()
+    
+    for individual in population:
+        
+        jobs_tuples = []
+        for job in individual.jobs:
+            jobs_tuples.append((job.id, job.start_time))
+
+        jobs_tuples.sort()
+        canonical_individual = tuple(jobs_tuples)
+        unique_individuals.add(canonical_individual)
+    
+    return len(unique_individuals)
+
     
 def normalize(data):
     min_val = min(data)
     max_val = max(data)
     return [(x - min_val) / (max_val - min_val) for x in data]
+
+def jobs2times(jobs):
+    start_times = [0] * len(jobs)
+    for j in jobs:
+        start_times[j.id] = j.start_time
+    return start_times
+
+# --- DataClass Definitions ---
+@dataclass
+class SolutionInfo:
+    makespan: int
+    start_times: List[int]
+
+@dataclass
+class ResultInfo:
+    problem_id: str
+    best: SolutionInfo
+    best_history: List[int]
+    population_diversity: List[float]
+    unique_solutions: List[int]
+    scout_bees: List[int]
+
+# --- Helper class for custom JSON encoding/decoding ---
+class EnhancedJSONEncoder(json.JSONEncoder):
+    """
+    A custom JSON encoder that handles dataclasses.
+    """
+    def default(self, o: Any) -> Any:
+        if is_dataclass(o):
+            return asdict(o)
+        return super().default(o)
+
+def _dataclass_from_dict(cls, data_dict):
+    """
+    Helper function to recursively convert dictionaries to dataclasses.
+    """
+    field_values = {}
+    for field_name, field_type in cls.__annotations__.items():
+        if field_name in data_dict:
+            value = data_dict[field_name]
+            # Check if the field type is a List of dataclasses
+            if hasattr(field_type, '__origin__') and field_type.__origin__ is list:
+                if len(field_type.__args__) > 0 and is_dataclass(field_type.__args__[0]):
+                    element_type = field_type.__args__[0]
+                    field_values[field_name] = [_dataclass_from_dict(element_type, item) for item in value]
+                else:
+                    field_values[field_name] = value
+            # Check if the field type is a dataclass itself
+            elif is_dataclass(field_type):
+                field_values[field_name] = _dataclass_from_dict(field_type, value)
+            else:
+                field_values[field_name] = value
+        # else:
+            # Handle missing fields if necessary, e.g., raise an error or use a default
+            # print(f"Warning: Field '{field_name}' not found in dictionary for class {cls.__name__}")
+    return cls(**field_values)
+
+
+# --- Save and Load Functions ---
+def save_results(results: List[ResultInfo], filename: str) -> None:
+    """
+    Saves a list of ResultInfo objects to a JSON file.
+
+    Args:
+        results: A list of ResultInfo objects to save.
+        filename: The name of the file to save the results to.
+                  (e.g., "optimization_results.json")
+    """
+    try:
+        with open(filename, 'w') as f:
+            json.dump([asdict(r) for r in results], f, indent=4, cls=EnhancedJSONEncoder)
+        print(f"Results successfully saved to {filename}")
+    except IOError as e:
+        print(f"Error saving results to {filename}: {e}")
+    except TypeError as e:
+        print(f"Error serializing results: {e}")
+
+def load_results(filename: str) -> List[ResultInfo]:
+    """
+    Loads a list of ResultInfo objects from a JSON file.
+
+    Args:
+        filename: The name of the file to load the results from.
+
+    Returns:
+        A list of ResultInfo objects, or an empty list if loading fails.
+    """
+    results: List[ResultInfo] = []
+    try:
+        with open(filename, 'r') as f:
+            data = json.load(f)
+            # Reconstruct the dataclasses from the dictionaries
+            for item_dict in data:
+                # Reconstruct SolutionInfo objects within best_history
+                best_history_reconstructed = []
+                if 'best_history' in item_dict:
+                    for sol_dict in item_dict['best_history']:
+                        best_history_reconstructed.append(SolutionInfo(**sol_dict))
+                
+                # Reconstruct the main SolutionInfo object for 'best'
+                best_solution_reconstructed = None
+                if 'best' in item_dict and item_dict['best'] is not None:
+                     best_solution_reconstructed = SolutionInfo(**item_dict['best'])
+
+                results.append(ResultInfo(
+                    problem_id=item_dict.get('problem_id', ''), # Provide default if key missing
+                    best=best_solution_reconstructed,
+                    best_history=best_history_reconstructed,
+                    population_diversity=item_dict.get('population_diversity', []),
+                    unique_solutions=item_dict.get('unique_solutions', []),
+                    scout_bees=item_dict.get('scout_bees', [])
+                ))
+        print(f"Results successfully loaded from {filename}")
+    except FileNotFoundError:
+        print(f"Error: File {filename} not found.")
+    except json.JSONDecodeError as e:
+        print(f"Error decoding JSON from {filename}: {e}")
+    except TypeError as e:
+        print(f"Error reconstructing dataclasses (likely a mismatch in structure): {e}")
+    except Exception as e:
+        print(f"An unexpected error occurred while loading results: {e}")
+    return results
+
+def loadProblems(path):
+    return [ProjectSchedulingModel.from_file(f"{path}{i}_{j}.sm") for i in range(1, 49) for j in range(1, 11)] 
+
+def loadBestKnown(dataset):
+    if dataset == 30:
+        with open("j30opt.sm", "r") as f:
+            lines = f.readlines()
+
+        optimal = []
+        for line in lines[22:502]:
+            line = line.split()
+            optimal.append(int(line[2]))
+        
+        return optimal
+    
+    with open(f"j{dataset}hrs.sm") as f:
+        lines = f.readlines()
+        
+    optimal = []
+    for line in lines[4:484]:
+        line = line.split()
+        optimal.append(int(line[2]))
+
+    return optimal

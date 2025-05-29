@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from EventList import EventList
 from typing import Tuple
 import multiprocessing as mp
-from Utils import positional_entropy, topological_sort
+from Utils import positional_entropy, topological_sort, calculate_unique_individuals
 
 @dataclass
 class Parameters:
@@ -12,7 +12,7 @@ class Parameters:
     limit: int
     max_trials: int
     mr: float = 0.1
-    l: int = 25
+    l: int = -1
 
 class ArtificialBeeColony:
     
@@ -30,9 +30,8 @@ class ArtificialBeeColony:
         population += self.mcmc_sampling(sdf, N/8, 0, 25)
         population += self.mcmc_sampling(mrf, N/8, 0, 25)
         population += self.mcmc_sampling(lrf, N/8, 0, 25)
-        population += self.mcmc_sampling(rnd, N/2, 0, 50)
 
-        return [EventList(psmodel=self.psmodel, jobs=p) for p in population]
+        return [EventList(psmodel=self.psmodel, jobs=p) for p in population] + [EventList(psmodel=self.psmodel) for _ in range(int(N/2))]
 
     def mcmc_sampling(self, permutation, num_sample, burn_in: int, spacing: int):
         samples = []
@@ -54,7 +53,7 @@ class ArtificialBeeColony:
         beg, end = slice
         for i in range(beg, end):
             self.updates[i] += 1
-            new_solution = self.food_sources[i].generate_new_local_solution()
+            new_solution = self.food_sources[i].generate_new_local_solution(steps=random.choices([1, 2, 3], weights=[0.9, 0.07, 0.03], k=1)[0])
             if new_solution.get_makespan() < self.food_sources[i].get_makespan():
                 self.food_sources[i] = new_solution
                 self.updates[i] = 0
@@ -71,15 +70,19 @@ class ArtificialBeeColony:
                 self.updates[selected] = 0
                 
     
-    def optimize(self, params: Parameters = None, num_workers: int = 1):
+    def optimize(self, params: Parameters = None, num_workers: int = 1, mode="basic", init="random"):
         
         self.params = self.params if params is None else params
         p = self.params
         slices = [(i*p.N//num_workers, (i+1)*p.N//num_workers) for i in range(num_workers)]
 
         trials = 0
-        # self.food_sources = [EventList(self.psmodel) for _ in range(p.N)]
-        self.food_sources = self.init_population(p.N)
+        if init == "random":
+            self.food_sources = [EventList(self.psmodel) for _ in range(p.N)]
+        elif init == "mcmc":
+            self.food_sources = self.init_population(p.N)
+        else:
+            raise ValueError(f'{init} not a valid initialization')
         self.updates = np.zeros(p.N, dtype=np.int32)
         best_solution = min(self.food_sources, key=lambda s: s.get_makespan())
         best_evolution = [best_solution]
@@ -87,41 +90,52 @@ class ArtificialBeeColony:
         permutations = [[job.id for job in solution.jobs] for solution in self.food_sources]
         population_diversity = [positional_entropy(permutations)[1]]
         nscout_bees = [0]
+        nunique_individuals = [calculate_unique_individuals(self.food_sources)]
         # average_distance = [average_pairwise_distance(permutations)]
         # k_average_distance = [average_pairwise_distance(permutations, metric='kendall')]
         
-        while trials < p.max_trials:
+        while trials < p.max_trials and best_solution.get_makespan() > self.psmodel.best_known:
             
             self.employeed_phase(slices[0])
             self.onlooker_phase(slices[0])
-                    
+
             iteration_best = min(self.food_sources, key=lambda s: s.get_makespan())
+            if params.l != -1 and trials % params.l == 0 and trials != 0:
+                iteration_best.shift_foward_search()
             if iteration_best.get_makespan() < best_solution.get_makespan():
                 best_solution = iteration_best
+                if params.l != -1:
+                    best_solution.shift_foward_search()
                 trials = 0
             else:
                 trials += 1
             best_evolution.append(best_solution)
-            if trials % params.l == 0 and trials != 0:
-                best_solution.shift_foward_search()
                 
             selected = np.where(self.updates > p.limit)[0]
             nscout_bees.append(len(selected))
             for i in selected:
-                self.food_sources[i] = best_solution.recombine_solution(self.food_sources[i]) if random.random() < 0.5 else self.food_sources[i].recombine_solution(best_solution)
+                if mode == "basic":
+                    self.food_sources[i] = EventList(psmodel=self.psmodel)
+                elif mode == "variant":
+                    self.food_sources[i] = best_solution.recombine_solution(EventList(psmodel=self.psmodel)) if random.random() < 0.5 else EventList(psmodel=self.psmodel).recombine_solution(best_solution)
+                else:
+                    raise ValueError(f'{mode} is not a valid mode')
                 r = random.random()
                 if r < params.mr:
-                    self.food_sources[i] = self.food_sources[i].swap_new_solution()
+                    self.food_sources[i] = self.food_sources[i].swap_new_solution(iterations=random.choices([1, 2, 3], weights=[0.75, 0.15, 0.1], k=1)[0])
                 self.updates[i] = 0
 
             permutations = [[job.id for job in solution.jobs] for solution in self.food_sources]
             population_diversity.append(positional_entropy(permutations)[1])
+            nunique_individuals.append(calculate_unique_individuals(self.food_sources))
             # average_distance.append(average_pairwise_distance(permutations))
             # k_average_distance.append(average_pairwise_distance(permutations, metric='kendall'))
         
         self.population_divsersity = population_diversity
         self.nscout_bees = nscout_bees
+        self.history = best_evolution
+        self.nunique_individuals = nunique_individuals
         # self.average_distance = average_distance
         # self.k_average_distance = k_average_distance
         
-        return best_evolution
+        return best_evolution[-1]
