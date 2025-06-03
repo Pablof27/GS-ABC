@@ -138,8 +138,6 @@ def positional_entropy(permutations):
 
     return average_entropy, normalized_entropy
 
-import numpy as np
-
 def hamming_distance(p1, p2):
     return sum(a != b for a, b in zip(p1, p2))
 
@@ -302,12 +300,6 @@ def load_results(filename: str) -> List[ResultInfo]:
             data = json.load(f)
             # Reconstruct the dataclasses from the dictionaries
             for item_dict in data:
-                # Reconstruct SolutionInfo objects within best_history
-                best_history_reconstructed = []
-                if 'best_history' in item_dict:
-                    for sol_dict in item_dict['best_history']:
-                        best_history_reconstructed.append(SolutionInfo(**sol_dict))
-                
                 # Reconstruct the main SolutionInfo object for 'best'
                 best_solution_reconstructed = None
                 if 'best' in item_dict and item_dict['best'] is not None:
@@ -316,7 +308,7 @@ def load_results(filename: str) -> List[ResultInfo]:
                 results.append(ResultInfo(
                     problem_id=item_dict.get('problem_id', ''), # Provide default if key missing
                     best=best_solution_reconstructed,
-                    best_history=best_history_reconstructed,
+                    best_history=item_dict.get('best_history', []),
                     population_diversity=item_dict.get('population_diversity', []),
                     unique_solutions=item_dict.get('unique_solutions', []),
                     scout_bees=item_dict.get('scout_bees', [])

@@ -17,8 +17,6 @@ class EventList:
         self.events = []
         self.psmodel = psmodel
         self.jobs = topological_sort(psmodel.jobs) if jobs is None else [copy.deepcopy(job) for job in jobs]
-        for job in self.jobs:
-            job.start_time = None
         self.create_event_list(psmodel.resources)
         
     def get_jobs(self) -> List[Job]:
@@ -71,7 +69,8 @@ class EventList:
                 raise ValueError("Invalid start time")
                 
     def create_event_list(self, resources: Resources):
-        
+        for job in self.jobs:
+            job.start_time = None
         self.add(self.jobs[0], start_time=0)
         current_time = 0
         for job in self.jobs[1:]:

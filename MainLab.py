@@ -40,7 +40,7 @@ def run_single_abc_optimization(problem_instance, params_obj, mode_str, init_str
         scout_bees=abc.nscout_bees
     )
 
-def experiment_parallel(problems_list, filename, base_params, mode_str="basic", init_str="random", num_runs_per_problem=5, max_workers=None):
+def experiment_parallel(problems_list, filename, base_params, mode_str="abc", init_str="random", num_runs_per_problem=5, max_workers=None):
     """
     Runs experiments in parallel using ProcessPoolExecutor with a tqdm progress bar.
     Collects all results for the given problems_list and saves them once at the end.
@@ -68,6 +68,7 @@ def experiment_parallel(problems_list, filename, base_params, mode_str="basic", 
         return []
 
     print(f"Starting parallel execution for {filename} with {len(tasks_to_submit)} total runs.")
+    print(f"Using {mode_str} with {init_str} initialization.")
     
     # Use ProcessPoolExecutor for parallel execution.
     # If max_workers is None, it defaults to the number of processors on the machine.
@@ -132,23 +133,23 @@ if __name__ == "__main__":
 
     # Define algorithm parameters
     params_dabc_obj = Parameters(N=200, limit=100, max_trials=500, mr=0.0)
-    params_gsabc_obj = Parameters(N=200, limit=100, max_trials=500, mr=0.1, l=50) # Assuming 'l' is a valid parameter
+    params_gsabc_obj = Parameters(N=200, limit=100, max_trials=500, mr=0.1, l=50)
     
     # Determine max_workers for the ProcessPoolExecutor
     # Uses all available CPU cores by default if None is passed to experiment_parallel or ProcessPoolExecutor
-    num_cores = os.cpu_count()
+    num_cores = os.cpu_count() - 1
     print(f"Configured to use up to {num_cores} cores for parallel execution.")
 
     # --- Run experiments for j30 problem set ---
     print("\nStarting experiments for j30 problems...")
-    experiment_parallel(
-        problems_list=problems_data.get("j30", []), # Use .get for safety if a key might be missing
-        filename="dabc_j30_parallel.json",    # Changed filename to denote parallel execution
-        base_params=params_dabc_obj,
-        mode_str="basic", 
-        init_str="random",
-        max_workers=num_cores  # Explicitly pass num_cores
-    )
+    # experiment_parallel(
+    #     problems_list=problems_data.get("j30", []), # Use .get for safety if a key might be missing
+    #     filename="dabc_j30_parallel.json",    # Changed filename to denote parallel execution
+    #     base_params=params_dabc_obj,
+    #     mode_str="abc", 
+    #     init_str="random",
+    #     max_workers=num_cores  # Explicitly pass num_cores
+    # )
     
     # experiment_parallel(
     #     problems_list=problems_data.get("j30", []),
@@ -179,12 +180,3 @@ if __name__ == "__main__":
     #     init_str="mcmc",
     #     max_workers=num_cores
     # )
-
-    # print("\nStarting experiments for j90 problems...")
-    # # ... (similar calls for j90)
-
-    # print("\nStarting experiments for j120 problems...")
-    # # ... (similar calls for j120)
-
-    print("\nAll scheduled experiments have been initiated.")
-    print("Note: Actual completion depends on the execution time of the tasks.")

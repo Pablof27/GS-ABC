@@ -68,14 +68,15 @@ class ArtificialBeeColony:
             if new_solution.get_makespan() < self.food_sources[selected].get_makespan():
                 self.food_sources[selected] = new_solution
                 self.updates[selected] = 0
+
+    def probability(self, trials, max_limit):
+        return 1/(1.1 + (trials * 8/max_limit)**2)
                 
     
-    def optimize(self, params: Parameters = None, num_workers: int = 1, mode="basic", init="random"):
+    def optimize(self, params: Parameters = None, mode="abc", init="random"):
         
         self.params = self.params if params is None else params
         p = self.params
-        slices = [(i*p.N//num_workers, (i+1)*p.N//num_workers) for i in range(num_workers)]
-
         trials = 0
         if init == "random":
             self.food_sources = [EventList(self.psmodel) for _ in range(p.N)]
@@ -96,8 +97,8 @@ class ArtificialBeeColony:
         
         while trials < p.max_trials and best_solution.get_makespan() > self.psmodel.best_known:
             
-            self.employeed_phase(slices[0])
-            self.onlooker_phase(slices[0])
+            self.employeed_phase((0, p.N))
+            self.onlooker_phase((0, p.N))
 
             iteration_best = min(self.food_sources, key=lambda s: s.get_makespan())
             if params.l != -1 and trials % params.l == 0 and trials != 0:
@@ -114,16 +115,27 @@ class ArtificialBeeColony:
             selected = np.where(self.updates > p.limit)[0]
             nscout_bees.append(len(selected))
             for i in selected:
-                if mode == "basic":
+                if mode == "abc":
                     self.food_sources[i] = EventList(psmodel=self.psmodel)
-                elif mode == "variant":
-                    self.food_sources[i] = best_solution.recombine_solution(EventList(psmodel=self.psmodel)) if random.random() < 0.5 else EventList(psmodel=self.psmodel).recombine_solution(best_solution)
+                elif mode.startswith("gs-abc"):
+                    if random.random() < self.probability(trials, p.max_trials):
+                        self.food_sources[i] = EventList(psmodel=self.psmodel)
+                        continue
+                    if mode.endswith("i"):
+                        i1 = iteration_best.recombine_solution(self.food_sources[i])
+                        i2 = self.food_sources[i].recombine_solution(iteration_best) 
+                        self.food_sources[i] = i1 if random.random() < 0.5 else i2
+                    elif mode.endswith("g"):
+                        g1 = best_solution.recombine_solution(self.food_sources[i])
+                        g2 = self.food_sources[i].recombine_solution(best_solution)
+                        self.food_sources[i] = g1 if random.random() < 0.5 else g2
+                    else:
+                        raise ValueError(f"{mode} is not valid. Missing final letter")
+                    if random.random() < params.mr:
+                        self.food_sources[i] = self.food_sources[i].swap_new_solution(iterations=random.choices([1, 2, 3], weights=[0.75, 0.15, 0.1], k=1)[0])
+                    self.updates[i] = 0
                 else:
                     raise ValueError(f'{mode} is not a valid mode')
-                r = random.random()
-                if r < params.mr:
-                    self.food_sources[i] = self.food_sources[i].swap_new_solution(iterations=random.choices([1, 2, 3], weights=[0.75, 0.15, 0.1], k=1)[0])
-                self.updates[i] = 0
 
             permutations = [[job.id for job in solution.jobs] for solution in self.food_sources]
             population_diversity.append(positional_entropy(permutations)[1])
