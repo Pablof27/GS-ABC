@@ -114,28 +114,20 @@ class ArtificialBeeColony:
                 
             selected = np.where(self.updates > p.limit)[0]
             nscout_bees.append(len(selected))
-            for i in selected:
-                if mode == "abc":
+            if mode == "abc":
+                for i in selected:
                     self.food_sources[i] = EventList(psmodel=self.psmodel)
-                elif mode.startswith("gs-abc"):
+            elif mode.startswith("gs-abc"):
+                for i in selected:
                     if random.random() < self.probability(trials, p.max_trials):
                         self.food_sources[i] = EventList(psmodel=self.psmodel)
                         continue
-                    if mode.endswith("i"):
-                        i1 = iteration_best.recombine_solution(self.food_sources[i])
-                        i2 = self.food_sources[i].recombine_solution(iteration_best) 
-                        self.food_sources[i] = i1 if random.random() < 0.5 else i2
-                    elif mode.endswith("g"):
-                        g1 = best_solution.recombine_solution(self.food_sources[i])
-                        g2 = self.food_sources[i].recombine_solution(best_solution)
-                        self.food_sources[i] = g1 if random.random() < 0.5 else g2
-                    else:
-                        raise ValueError(f"{mode} is not valid. Missing final letter")
+                    self.food_sources[i] = iteration_best.recombine_solution(self.food_sources[i]) if random.random() < 0.5 else self.food_sources[i].recombine_solution(iteration_best)
                     if random.random() < params.mr:
                         self.food_sources[i] = self.food_sources[i].swap_new_solution(iterations=random.choices([1, 2, 3], weights=[0.75, 0.15, 0.1], k=1)[0])
                     self.updates[i] = 0
-                else:
-                    raise ValueError(f'{mode} is not a valid mode')
+            else:
+                raise ValueError(f'{mode} is not a valid mode')
 
             permutations = [[job.id for job in solution.jobs] for solution in self.food_sources]
             population_diversity.append(positional_entropy(permutations)[1])
