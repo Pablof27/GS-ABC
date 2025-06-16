@@ -213,3 +213,6 @@ class EventList:
         for event in self.events:
             sol_str += f"Event {event.id} at time {event.startTime}, jobs: {', '.join(str(job.id + 1) for job in event.jobs)}\n"
         return sol_str
+
+    def __hash__(self):
+        return id(self)

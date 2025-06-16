@@ -1,11 +1,18 @@
 # Original imports
-from Utils import loadProblems, loadBestKnown, save_results, ResultInfo, SolutionInfo, jobs2times
-from ArtificialBeeColony import ArtificialBeeColony, Parameters
+from Utils import loadProblems, loadBestKnown, save_results 
+from ArtificialBeeColony import Parameters
 import os
 import concurrent.futures
-
-# Added import for progress bar
 from tqdm import tqdm
+import random
+
+shutdown_event = False
+
+def handle_signal(signum, frame):
+    global shutdown_event
+    print(f"Received signal {signum}. Initiating shutdown...")
+    shutdown_event = True
+
 
 PATHS = ["j30.sm/j30", "j60.sm/j60", "j90.sm/j90", "j120.sm/j120"]
 
@@ -75,25 +82,36 @@ def experiment_parallel(problems_list, filename, base_params, mode_str="abc", in
     if max_workers is None:
         max_workers = os.cpu_count()
         
-    with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-        # Submit tasks to the executor.
-        # executor.submit(fn, *args, **kwargs)
-        futures = [executor.submit(run_single_abc_optimization, p_inst, params_obj, m_str, i_str)
-                   for p_inst, params_obj, m_str, i_str in tasks_to_submit]
+    try:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
+            # Submit tasks to the executor.
+            # executor.submit(fn, *args, **kwargs)
+            futures = [executor.submit(run_single_abc_optimization, p_inst, params_obj, m_str, i_str)
+                    for p_inst, params_obj, m_str, i_str in tasks_to_submit]
 
-        # Use tqdm for a progress bar as tasks complete.
-        # concurrent.futures.as_completed yields futures as they finish.
-        for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc=f"Optimizing {filename}"):
-            try:
-                result = future.result()  # Get the ResultInfo object from the completed future
-                all_results.append(result)
-            except Exception as exc:
-                # Handle exceptions from individual tasks if necessary
-                # For now, just print the exception. You might want to log more details
-                # or store information about which specific task failed.
-                print(f"\nA task for {filename} generated an exception: {exc}")
-                # Optionally, append a placeholder or error marker to all_results
-                # or re-raise if critical.
+            # Use tqdm for a progress bar as tasks complete.
+            # concurrent.futures.as_completed yields futures as they finish.
+            for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc=f"Optimizing {filename}"):
+                try:
+                    result = future.result()  # Get the ResultInfo object from the completed future
+                    all_results.append(result)
+                    if shutdown_event:
+                        print("Shutdown flag detected, stopping early.")
+                        break
+                except Exception as exc:
+                    # Handle exceptions from individual tasks if necessary
+                    # For now, just print the exception. You might want to log more details
+                    # or store information about which specific task failed.
+                    print(f"\nA task for {filename} generated an exception: {exc}")
+                    # Optionally, append a placeholder or error marker to all_results
+                    # or re-raise if critical.
+    finally:
+        if executor:
+            print("Shutting down executor...")
+            executor.shutdown(wait=False, cancel_futures=True)
+        print("Saving partial results...")
+        save_results(results=all_results, filename=filename)
+        print(f"Results for {filename} saved successfully. Total results: {len(all_results)}.")
 
     # Save all collected results once after all parallel tasks are done.
     if all_results:
@@ -109,6 +127,7 @@ def experiment_parallel(problems_list, filename, base_params, mode_str="abc", in
 if __name__ == "__main__":
     # Ensure that custom modules (Utils, ArtificialBeeColony) are accessible.
     # This is typically true if they are in the same directory or in PYTHONPATH.
+    
 
     print("Loading problems and best known solutions...")
     # Load problem sets
@@ -130,53 +149,79 @@ if __name__ == "__main__":
         else:
             print(f"Warning: No best_known data found for problem key {key}.")
 
-
-    # Define algorithm parameters
-    params_dabc_obj = Parameters(N=200, limit=100, max_trials=500, mr=0.0)
-    params_gsabc_obj = Parameters(N=200, limit=100, max_trials=500, mr=0.1, l=50)
-    
     # Determine max_workers for the ProcessPoolExecutor
     # Uses all available CPU cores by default if None is passed to experiment_parallel or ProcessPoolExecutor
-    num_cores = os.cpu_count() - 1
+    num_cores = os.cpu_count()
     print(f"Configured to use up to {num_cores} cores for parallel execution.")
 
-    # --- Run experiments for j30 problem set ---
-    print("\nStarting experiments for j30 problems...")
-    # experiment_parallel(
-    #     problems_list=problems_data.get("j30", []), # Use .get for safety if a key might be missing
-    #     filename="dabc_j30_parallel.json",    # Changed filename to denote parallel execution
-    #     base_params=params_dabc_obj,
-    #     mode_str="abc", 
-    #     init_str="random",
-    #     max_workers=num_cores  # Explicitly pass num_cores
-    # )
-    
-    # experiment_parallel(
-    #     problems_list=problems_data.get("j30", []),
-    #     filename="gsabc_j30_parallel.json",   # Changed filename
-    #     base_params=params_gsabc_obj, 
-    #     mode_str="variant", 
-    #     init_str="mcmc",
-    #     max_workers=num_cores
-    # )
-    
-    # --- Optionally, run experiments for other problem sets (j60, j90, j120) ---
-    # You can uncomment and adapt these sections to run more experiments.
+    RES_PATH = "Results"
 
-    # print("\nStarting experiments for j60 problems...")
+    n = 48
+    problems_idx = {key: [i+random.randint(0, 480//n-1) for i in range(0, 480, 480//n)] for key in problems_data.keys()}
+    print(problems_idx)
+    problems_used = [problems_data[key][i] for key in problems_data.keys() for i in problems_idx[key]]
+    print([problem.name for problem in problems_used])
+    
+    # params_obj = Parameters(N=5*30, limit=30*2, max_trials=4*30*4, mr=0.1, l=25)
     # experiment_parallel(
-    #     problems_list=problems_data.get("j60", []),
-    #     filename="dabc_j60_parallel.json",
-    #     base_params=params_dabc_obj,
-    #     mode_str="basic",
-    #     init_str="random",
-    #     max_workers=num_cores
-    # )
-    # experiment_parallel(
-    #     problems_list=problems_data.get("j60", []),
-    #     filename="gsabc_j60_parallel.json",
-    #     base_params=params_gsabc_obj,
-    #     mode_str="variant",
+    #     problems_list=problems_used[:48],
+    #     filename=f"{RES_PATH}/j30-gs-abc.json",
+    #     base_params=params_obj,
+    #     mode_str="gs-abc",
     #     init_str="mcmc",
-    #     max_workers=num_cores
+    #     num_runs_per_problem=5
     # )
+    params_obj = Parameters(N=5*60, limit=60*2, max_trials=4*60*4, mr=0.15, l=25)
+    experiment_parallel(
+        problems_list=problems_used[48:48*2],
+        filename=f"{RES_PATH}/j60-gs-abc.json",
+        base_params=params_obj,
+        mode_str="gs-abc",
+        init_str="mcmc",
+        num_runs_per_problem=5
+    )
+    params_obj = Parameters(N=5*60, limit=60*2, max_trials=4*60*4)
+    experiment_parallel(
+        problems_list=problems_used[48:48*2],
+        filename=f"{RES_PATH}/j60-abc.json",
+        base_params=params_obj,
+        mode_str="abc",
+        init_str="random",
+        num_runs_per_problem=5
+    )
+    params_obj = Parameters(N=5*90, limit=90*2, max_trials=4*90*4, mr=0.15, l=25)
+    experiment_parallel(
+        problems_list=problems_used[48*2:48*3],
+        filename=f"{RES_PATH}/j90-gs-abc.json",
+        base_params=params_obj,
+        mode_str="gs-abc",
+        init_str="mcmc",
+        num_runs_per_problem=5
+    )
+    params_obj = Parameters(N=5*90, limit=90*2, max_trials=4*90*4)
+    experiment_parallel(
+        problems_list=problems_used[48*2:48*3],
+        filename=f"{RES_PATH}/j90-abc.json",
+        base_params=params_obj,
+        mode_str="abc",
+        init_str="random",
+        num_runs_per_problem=5
+    )
+    params_obj = Parameters(N=5*120, limit=120*2, max_trials=16*120, mr=0.25, l=25)
+    experiment_parallel(
+        problems_list=problems_used[48*3:48*3+5],
+        filename=f"{RES_PATH}/j120-gs-abc.json",
+        base_params=params_obj,
+        mode_str="gs-abc",
+        init_str="mcmc",
+        num_runs_per_problem=5
+    )
+    params_obj = Parameters(N=5*120, limit=120*2, max_trials=16*120)
+    experiment_parallel(
+        problems_list=problems_used[48*3:48*3+5],
+        filename=f"{RES_PATH}/j120-abc.json",
+        base_params=params_obj,
+        mode_str="abc",
+        init_str="random",
+        num_runs_per_problem=5
+    )

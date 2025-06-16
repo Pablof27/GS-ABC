@@ -18,7 +18,7 @@ def topological_sort(jobs: List[Job], metric='random') -> List[Job]:
             graph[job.id].append(successor)
             in_degree[successor] += 1
     
-    queue = [job for job in jobs if in_degree[job.id] == 0]
+    queue = [copy.deepcopy(job) for job in jobs if in_degree[job.id] == 0]
     sorted_jobs = []
     
     if metric == 'random':
@@ -36,7 +36,7 @@ def topological_sort(jobs: List[Job], metric='random') -> List[Job]:
     
     while queue:
         job = queue.pop(select_func(queue))
-        sorted_jobs.append(copy.deepcopy(job))
+        sorted_jobs.append(job)
         
         for successor in graph[job.id]:
             in_degree[successor] -= 1
@@ -68,7 +68,7 @@ def plot_multiple_schedules(schedules, titles=None, mapping=None, save_name=""):
     num_schedules = len(schedules)
     _, num_times = schedules[0].shape  # All schedules have the same number of columns (time steps)
 
-    FONT_SIZE = 20
+    FONT_SIZE = 10
     
     plt.rcParams.update({
         'font.family': 'Courier New',
@@ -362,6 +362,16 @@ def loadBestKnown(dataset):
         optimal.append(int(line[2]))
 
     return optimal
+
+def arpd(results, problems: list[ProjectSchedulingModel]):
+    desviations = {problem.name: [] for problem in problems}
+    desviation_sum = 0
+    for result in results:
+        problem = next(filter(lambda x: x.name == result.problem_id, problems))
+        desviations[problem.name].append(result.best.makespan - problem.best_known)
+        desviation_sum += desviations[problem.name][-1]
+
+    return desviation_sum/len(desviations), desviations
 
 def plot_multiple_schedules_with_legend(schedules, titles=None, colormap_name='viridis', job_id_mapping=None):
     """
