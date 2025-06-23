@@ -16,7 +16,10 @@ class EventList:
     def __init__(self, psmodel: ProjectSchedulingModel, jobs: List[Job] | None = None):
         self.events = []
         self.psmodel = psmodel
-        self.jobs = topological_sort(psmodel.jobs) if jobs is None else [copy.deepcopy(job) for job in jobs]
+        
+        initial_jobs = topological_sort(psmodel.jobs) if jobs is None else jobs
+        self.jobs =  [copy.deepcopy(job) for job in initial_jobs]
+        self.job_map = {job.id: job for job in self.jobs}
         self.create_event_list(psmodel.resources)
         
     def get_jobs(self) -> List[Job]:
@@ -74,7 +77,8 @@ class EventList:
         self.add(self.jobs[0], start_time=0)
         current_time = 0
         for job in self.jobs[1:]:
-            last_predecessor = max(filter(lambda j: j.id in job.predecessors, self.jobs), key=lambda j: j.start_time + j.duration)
+            predecessor_jobs = [self.job_map[p_id] for p_id in job.predecessors]
+            last_predecessor = max(predecessor_jobs, key=lambda j: j.start_time + j.duration)
             predecessors_end_time = last_predecessor.start_time + last_predecessor.duration
             base_time = max(predecessors_end_time, current_time)
             start_time = resources.get_time_for_resources(self.jobs, job, base_time)

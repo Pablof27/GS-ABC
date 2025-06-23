@@ -18,7 +18,7 @@ def topological_sort(jobs: List[Job], metric='random') -> List[Job]:
             graph[job.id].append(successor)
             in_degree[successor] += 1
     
-    queue = [copy.deepcopy(job) for job in jobs if in_degree[job.id] == 0]
+    queue = [job for job in jobs if in_degree[job.id] == 0]
     sorted_jobs = []
     
     if metric == 'random':

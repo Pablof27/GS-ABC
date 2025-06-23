@@ -18,7 +18,7 @@ PATHS = ["j30.sm/j30", "j60.sm/j60", "j90.sm/j90", "j120.sm/j120"]
 
 # Helper function for a single optimization run (to be used with ProcessPoolExecutor)
 # This function will be executed in a separate process.
-def run_single_abc_optimization(problem_instance, params_obj, mode_str, init_str):
+def run_single_abc_optimization(problem_instance, params_obj, mode_str):
     """
     Runs a single ABC optimization for a given problem and parameters.
     This function is designed to be called by ProcessPoolExecutor.
@@ -32,7 +32,7 @@ def run_single_abc_optimization(problem_instance, params_obj, mode_str, init_str
 
     # Create and run the ABC algorithm
     abc = ArtificialBeeColony(psmodel=problem_instance)
-    res = abc.optimize(params=params_obj, mode=mode_str, init=init_str)
+    res = abc.optimize(params=params_obj, mode=mode_str)
     
     # Construct and return the result object
     return ResultInfo(
@@ -47,7 +47,7 @@ def run_single_abc_optimization(problem_instance, params_obj, mode_str, init_str
         scout_bees=abc.nscout_bees
     )
 
-def experiment_parallel(problems_list, filename, base_params, mode_str="abc", init_str="random", num_runs_per_problem=5, max_workers=None):
+def experiment_parallel(problems_list, filename, base_params: Parameters, mode_str="abc", num_runs_per_problem=5, max_workers=None):
     """
     Runs experiments in parallel using ProcessPoolExecutor with a tqdm progress bar.
     Collects all results for the given problems_list and saves them once at the end.
@@ -68,14 +68,14 @@ def experiment_parallel(problems_list, filename, base_params, mode_str="abc", in
     tasks_to_submit = []
     for p_instance in problems_list:
         for _ in range(num_runs_per_problem):
-            tasks_to_submit.append((p_instance, base_params, mode_str, init_str))
+            tasks_to_submit.append((p_instance, base_params, mode_str))
             
     if not tasks_to_submit:
         print(f"No tasks to run for {filename}. Skipping.")
         return []
 
     print(f"Starting parallel execution for {filename} with {len(tasks_to_submit)} total runs.")
-    print(f"Using {mode_str} with {init_str} initialization.")
+    print(f"Using {mode_str} with heuristic rate {base_params.init_params} initialization.")
     
     # Use ProcessPoolExecutor for parallel execution.
     # If max_workers is None, it defaults to the number of processors on the machine.
@@ -86,8 +86,8 @@ def experiment_parallel(problems_list, filename, base_params, mode_str="abc", in
         with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
             # Submit tasks to the executor.
             # executor.submit(fn, *args, **kwargs)
-            futures = [executor.submit(run_single_abc_optimization, p_inst, params_obj, m_str, i_str)
-                    for p_inst, params_obj, m_str, i_str in tasks_to_submit]
+            futures = [executor.submit(run_single_abc_optimization, p_inst, params_obj, m_str)
+                    for p_inst, params_obj, m_str in tasks_to_submit]
 
             # Use tqdm for a progress bar as tasks complete.
             # concurrent.futures.as_completed yields futures as they finish.
@@ -109,17 +109,17 @@ def experiment_parallel(problems_list, filename, base_params, mode_str="abc", in
         if executor:
             print("Shutting down executor...")
             executor.shutdown(wait=False, cancel_futures=True)
-        print("Saving partial results...")
+        print("Saving final results...")
         save_results(results=all_results, filename=filename)
         print(f"Results for {filename} saved successfully. Total results: {len(all_results)}.")
 
     # Save all collected results once after all parallel tasks are done.
-    if all_results:
-        # Ensure Utils.save_results is available (it's imported at the top level)
-        save_results(results=all_results, filename=filename)
-        print(f"Results for {filename} saved successfully. Total results: {len(all_results)}.")
-    else:
-        print(f"No results were collected for {filename}.")
+    # if all_results:
+    #     # Ensure Utils.save_results is available (it's imported at the top level)
+    #     save_results(results=all_results, filename=filename)
+    #     print(f"Results for {filename} saved successfully. Total results: {len(all_results)}.")
+    # else:
+    #     print(f"No results were collected for {filename}.")
     
     return all_results # Optionally return the collected results
 
