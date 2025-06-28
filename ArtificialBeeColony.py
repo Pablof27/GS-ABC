@@ -40,9 +40,13 @@ class ArtificialBeeColony:
         population += self.mcmc_sampling(lrf, proportion, 0, sampling)
 
         final_population = [EventList(psmodel=self.psmodel, jobs=p) for p in population] + [EventList(psmodel=self.psmodel) for _ in range(N-len(population))]
-        return final_population[:N]
+        return final_population
 
     def mcmc_sampling(self, permutation, num_sample, burn_in: int, spacing: int):
+
+        if spacing == 0:
+            return [permutation] * num_sample
+        
         samples = []
         iterations = burn_in + num_sample * spacing
 

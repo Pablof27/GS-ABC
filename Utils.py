@@ -351,8 +351,8 @@ def loadBestKnown(dataset):
             line = line.split()
             optimal.append(int(line[2]))
         
-        return optimal
-    
+        return optimal    
+
     with open(f"j{dataset}hrs.sm") as f:
         lines = f.readlines()
         
@@ -360,6 +360,13 @@ def loadBestKnown(dataset):
     for line in lines[4:484]:
         line = line.split()
         optimal.append(int(line[2]))
+
+    # with open(f"j{dataset}lb.sm") as f:
+    #     lines = f.readlines()
+    
+    # lower_bounds = []
+    # for line in lines[11:]:
+    #     pass
 
     return optimal
 

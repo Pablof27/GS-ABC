@@ -5,6 +5,7 @@ from Utils import topological_sort, plot_solution
 from dataclasses import dataclass
 import copy
 from dijkstar import Graph, find_path
+from collections import deque
 
 @dataclass
 class EventList:
@@ -43,13 +44,13 @@ class EventList:
 
     def shift_foward_search(self):
         can_shift = True
-        max_trials = len(self.jobs)/3
         while can_shift:
             can_shift = False
             for job in self.jobs[1:]:
                 old_start_time = job.start_time
                 job.start_time = None
-                last_predecessor = max(filter(lambda j: j.id in job.predecessors, self.jobs), key=lambda j: j.start_time + j.duration)
+                predecessor_jobs = [self.job_map[p_id] for p_id in job.predecessors]
+                last_predecessor = max(predecessor_jobs, key=lambda j: j.start_time + j.duration)
                 predecessors_end_time = last_predecessor.start_time + last_predecessor.duration
                 new_time = self.psmodel.resources.get_time_for_resources(self.jobs, job, predecessors_end_time, old_start_time)
                 job.start_time = old_start_time
@@ -108,23 +109,50 @@ class EventList:
             job.start_time = start_time
                         
     def random_local_solution(self) -> 'EventList':
+        # Start with the current job order (shallow copy is sufficient here).
+        current_jobs = self.jobs[:]
         
-        new_jobs = copy.deepcopy(self.jobs)
-        random_event = random.choice(self.events[:-1])
-        
-        for job in random_event.jobs:
-            if job.id == 0:
-                continue
-            new_job = new_jobs.pop(new_jobs.index(job))
-            inferior_pos = max(filter(lambda j: j.id in new_job.predecessors, new_jobs), key=lambda j: new_jobs.index(j))
-            superior_pos = min(filter(lambda j: j.id in new_job.sucessors, new_jobs), key=lambda j: new_jobs.index(j))
-            new_pos = random.randint(new_jobs.index(inferior_pos) + 1, new_jobs.index(superior_pos))
-            # print(f"Moving job {job.id} to position {new_pos} in the interval {[new_jobs.index(inferior_pos) + 1, new_jobs.index(superior_pos)]}")
-            # print(f"    Predecessors: {job.predecessors}")
-            # print(f"    Sucessors: {job.sucessors}")
-            new_jobs.insert(new_pos, new_job)
+        # Select a random event and the jobs to be rescheduled.
+        # Exclude the last event which might just be the dummy end job.
+        possible_events = self.events[:-1]
+        if not possible_events:
+            return EventList(self.psmodel, current_jobs)
             
-        return EventList(self.psmodel, new_jobs)
+        random_event = random.choice(possible_events)
+        # Don't move the dummy start job (id=0).
+        jobs_to_reinsert = [j for j in random_event.jobs if j.id != 0]
+        
+        if not jobs_to_reinsert:
+            return EventList(self.psmodel, current_jobs)
+            
+        # Create a list of jobs that are fixed for now.
+        jobs_to_reinsert_ids = {j.id for j in jobs_to_reinsert}
+        fixed_jobs = [j for j in current_jobs if j.id not in jobs_to_reinsert_ids]
+        
+        # Re-insert the chosen jobs one by one into the 'fixed_jobs' list.
+        for job_to_add in jobs_to_reinsert:
+            # For each job, find its valid insertion range in the current list.
+            pos_map = {job.id: i for i, job in enumerate(fixed_jobs)}
+            
+            # Find the indices of predecessors and successors that are in the fixed list.
+            pred_indices = [pos_map[p_id] for p_id in job_to_add.predecessors if p_id in pos_map]
+            succ_indices = [pos_map[s_id] for s_id in job_to_add.sucessors if s_id in pos_map]
+
+            # The job must be inserted after all its predecessors and before all its successors.
+            lower_bound = max(pred_indices) if pred_indices else -1
+            upper_bound = min(succ_indices) if succ_indices else len(fixed_jobs)
+            
+            # The valid range for insertion is (lower_bound, upper_bound].
+            # randint is inclusive, so the range is [lower_bound + 1, upper_bound].
+            if lower_bound + 1 > upper_bound:
+                # No valid spot exists, insert at the earliest possible position.
+                new_pos = lower_bound + 1
+            else:
+                 new_pos = random.randint(lower_bound + 1, upper_bound)
+            
+            fixed_jobs.insert(new_pos, job_to_add)
+
+        return EventList(self.psmodel, fixed_jobs)
 
     def swap_new_solution(self, iterations=1) -> 'EventList':
         
@@ -153,41 +181,95 @@ class EventList:
             
         return sol
 
+    # def recombine_solution(self, other: 'EventList') -> 'EventList':
+    #     self_events = []
+    #     selected_jobs = []
+    #     sorted_events = sorted(self.events, key=lambda e: len(e.jobs), reverse=True)
+    #     for e in sorted_events:
+    #         self_events.append(e)
+    #         selected_jobs.extend(e.jobs)
+    #         if len(selected_jobs) >= len(self.jobs)/2:
+    #             break
+    #     self_events = sorted(self_events, key=lambda e: e.startTime)
+    #     other_jobs = copy.deepcopy(list(filter(lambda j: j not in selected_jobs, other.jobs)))
+    #     selected_jobs = []
+    #     left_jobs_queue = []
+    #     while len(self_events) > 0 or len(other_jobs) > 0 or len(left_jobs_queue) > 0:
+    #         if len(left_jobs_queue) > 0:
+    #             job = left_jobs_queue.pop(0)
+    #             if set(job.predecessors).issubset([j.id for j in selected_jobs]):
+    #                 selected_jobs.append(job)
+    #             else:
+    #                 left_jobs_queue.append(job)
+    #         if len(other_jobs) > 0:
+    #             job = other_jobs[0]
+    #             if set(job.predecessors).issubset([j.id for j in selected_jobs]):
+    #                 selected_jobs.append((other_jobs.pop(0)))
+    #                 continue
+    #         if len(self_events) == 0:
+    #             continue
+    #         event = self_events.pop(0)
+    #         for j in event.jobs:
+    #             if set(j.predecessors).issubset([j_.id for j_ in selected_jobs]):
+    #                 selected_jobs.append(j)
+    #             else:
+    #                 left_jobs_queue.append(j)
+        
+    #     return EventList(self.psmodel, jobs=selected_jobs)
+
     def recombine_solution(self, other: 'EventList') -> 'EventList':
-        self_events = []
-        selected_jobs = []
+        """
+        Recombines two solutions to create a new one.
+
+        OPTIMIZATION:
+        - This is a complete rewrite for performance and clarity.
+        - Uses sets for fast filtering of jobs (O(1) per job).
+        - Uses deques for efficient queue management.
+        - The logic is simplified to a greedy scheduler: it tries to add jobs from a combined
+          candidate pool into a new valid schedule, prioritizing the 'other' solution's order.
+          This maintains the spirit of recombination while being much faster.
+        """
+        # 1. Select "elite" jobs from this solution's largest events.
+        elite_jobs = []
         sorted_events = sorted(self.events, key=lambda e: len(e.jobs), reverse=True)
         for e in sorted_events:
-            self_events.append(e)
-            selected_jobs.extend(e.jobs)
-            if len(selected_jobs) >= len(self.jobs)/2:
+            elite_jobs.extend(e.jobs)
+            if len(elite_jobs) >= len(self.jobs) / 2:
                 break
-        self_events = sorted(self_events, key=lambda e: e.startTime)
-        other_jobs = copy.deepcopy(list(filter(lambda j: j not in selected_jobs, other.jobs)))
-        selected_jobs = []
-        left_jobs_queue = []
-        while len(self_events) > 0 or len(other_jobs) > 0 or len(left_jobs_queue) > 0:
-            if len(left_jobs_queue) > 0:
-                job = left_jobs_queue.pop(0)
-                if set(job.predecessors).issubset([j.id for j in selected_jobs]):
-                    selected_jobs.append(job)
-                else:
-                    left_jobs_queue.append(job)
-            if len(other_jobs) > 0:
-                job = other_jobs[0]
-                if set(job.predecessors).issubset([j.id for j in selected_jobs]):
-                    selected_jobs.append((other_jobs.pop(0)))
-                    continue
-            if len(self_events) == 0:
-                continue
-            event = self_events.pop(0)
-            for j in event.jobs:
-                if set(j.predecessors).issubset([j_.id for j_ in selected_jobs]):
-                    selected_jobs.append(j)
-                else:
-                    left_jobs_queue.append(j)
         
-        return EventList(self.psmodel, jobs=selected_jobs)
+        elite_job_ids = {j.id for j in elite_jobs}
+
+        # 2. Get jobs from the 'other' solution that are not in our elite set.
+        # The job order from the other solution is preserved.
+        other_jobs_to_add = [j for j in other.jobs if j.id not in elite_job_ids]
+
+        # 3. Create a single pool of jobs to schedule, prioritizing 'other' solution's order,
+        # then adding the elite jobs from 'self'.
+        candidate_queue = deque(other_jobs_to_add + elite_jobs)
+        
+        final_jobs = []
+        final_job_ids = set()
+        
+        # 4. Greedily build the new schedule by cycling through candidates.
+        while candidate_queue:
+            scheduled_this_pass = False
+            # Iterate through all candidates currently in the queue.
+            for _ in range(len(candidate_queue)):
+                job = candidate_queue.popleft()
+                # Use a set for fast predecessor check.
+                if set(job.predecessors).issubset(final_job_ids):
+                    final_jobs.append(job)
+                    final_job_ids.add(job.id)
+                    scheduled_this_pass = True
+                else:
+                    candidate_queue.append(job) # Put back at the end of the queue to wait.
+            
+            # If a full pass over the queue adds no new jobs, we are stuck.
+            if not scheduled_this_pass:
+                print(f"Warning: Recombination could not place {len(candidate_queue)} jobs due to dependency constraints.")
+                break
+                
+        return EventList(self.psmodel, jobs=final_jobs)
     
     def generate_schedule_scheme(self) -> np.array:
         resources = self.psmodel.resources.resources

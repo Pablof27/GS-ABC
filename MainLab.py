@@ -75,7 +75,7 @@ def experiment_parallel(problems_list, filename, base_params: Parameters, mode_s
         return []
 
     print(f"Starting parallel execution for {filename} with {len(tasks_to_submit)} total runs.")
-    print(f"Using {mode_str} with heuristic rate {base_params.init_params} initialization.")
+    print(f"Using {mode_str} with init params {base_params.init_params}.")
     
     # Use ProcessPoolExecutor for parallel execution.
     # If max_workers is None, it defaults to the number of processors on the machine.
